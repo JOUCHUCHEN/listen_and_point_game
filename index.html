@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互動式聽音指圖遊戲</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f0f9ff;
+            overflow: hidden;
+            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Microsoft JhengHei', sans-serif;
+        }
+        .mirror {
+            transform: scaleX(-1);
+        }
+        .target-box {
+            transition: all 0.3s ease;
+            border: 4px solid transparent;
+        }
+        .target-box.active {
+            border-color: #fbbf24;
+            background-color: rgba(251, 191, 36, 0.2);
+            transform: scale(1.1);
+        }
+        .target-box.success {
+            border-color: #34d399;
+            background-color: rgba(52, 211, 153, 0.4);
+            transform: scale(1.2);
+        }
+        #video-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            background: #e5e7eb;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .emoji-icon {
+            font-size: 5rem;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="text-center mb-6">
+        <h1 class="text-4xl font-bold text-blue-600 mb-2">Listen and Point!</h1>
+        <p class="text-gray-600 text-lg">請根據聽到的單字，指向正確的動物</p>
+        <div class="mt-2 text-2xl font-bold text-orange-500">得分: <span id="score">0</span></div>
+    </div>
+
+    <div id="video-container" class="aspect-video flex items-center justify-center">
+        <video id="input_video" class="mirror" style="display:none" playsinline></video>
+        <canvas id="output_canvas"></canvas>
+        
+        <!-- 遊戲區域 -->
+        <div id="game-ui" class="hidden contents">
+            <div id="target-0" class="target-box absolute top-4 left-4 w-40 h-40 flex flex-col items-center justify-center rounded-2xl bg-white shadow-lg pointer-events-none">
+                <span class="emoji-icon">🐱</span>
+                <span class="text-xl font-bold mt-2">Cat</span>
+            </div>
+            <div id="target-1" class="target-box absolute top-4 right-4 w-40 h-40 flex flex-col items-center justify-center rounded-2xl bg-white shadow-lg pointer-events-none">
+                <span class="emoji-icon">🐢</span>
+                <span class="text-xl font-bold mt-2">Turtle</span>
+            </div>
+            <div id="target-2" class="target-box absolute bottom-4 left-4 w-40 h-40 flex flex-col items-center justify-center rounded-2xl bg-white shadow-lg pointer-events-none">
+                <span class="emoji-icon">🐦</span>
+                <span class="text-xl font-bold mt-2">Bird</span>
+            </div>
+            <div id="target-3" class="target-box absolute bottom-4 right-4 w-40 h-40 flex flex-col items-center justify-center rounded-2xl bg-white shadow-lg pointer-events-none">
+                <span class="emoji-icon">🐰</span>
+                <span class="text-xl font-bold mt-2">Rabbit</span>
+            </div>
+        </div>
+
+        <!-- 啟動面版 -->
+        <div id="init-panel" class="absolute inset-0 bg-white bg-opacity-95 flex flex-col items-center justify-center z-10 p-6 text-center">
+            <div id="start-view">
+                <div class="mb-6 text-blue-500">
+                    <svg class="w-20 h-20 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-bold mb-4">準備好開始了嗎？</h2>
+                <p class="text-gray-600 mb-8">請點擊下方按鈕，並在彈出的視窗中點擊<strong>「允許」</strong>攝影機權限。</p>
+                <button id="btn-start-camera" class="bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold py-4 px-12 rounded-full shadow-xl transition transform hover:scale-105 active:scale-95">
+                    立即啟動攝影機
+                </button>
+            </div>
+            
+            <!-- 錯誤提示 (預設隱藏) -->
+            <div id="error-view" class="hidden">
+                <div class="text-red-500 text-6xl mb-4">🚫</div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">權限存取失敗</h2>
+                <div class="bg-red-50 p-4 rounded-lg text-left text-gray-700 text-sm mb-6 max-w-md">
+                    <p class="font-bold mb-2">請嘗試以下步驟：</p>
+                    <ol class="list-decimal ml-5 space-y-1">
+                        <li>查看網址列最左側是否有<strong>「攝影機/鎖頭」</strong>圖示。</li>
+                        <li>確認權限是否設為<strong>「允許」</strong>。</li>
+                        <li>若在特定 App (如 LINE/FB) 中開啟，請改用 <strong>Safari</strong> 或 <strong>Chrome</strong> 瀏覽器。</li>
+                    </ol>
+                </div>
+                <button onclick="location.reload()" class="bg-gray-800 hover:bg-black text-white font-bold py-3 px-10 rounded-full transition shadow-md">
+                    重試一次
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <button onclick="playRound(0)" class="btn-animal bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-8 rounded-full shadow-lg transition transform active:scale-95">按鈕 1</button>
+        <button onclick="playRound(1)" class="btn-animal bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-8 rounded-full shadow-lg transition transform active:scale-95">按鈕 2</button>
+        <button onclick="playRound(2)" class="btn-animal bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-8 rounded-full shadow-lg transition transform active:scale-95">按鈕 3</button>
+        <button onclick="playRound(3)" class="btn-animal bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-8 rounded-full shadow-lg transition transform active:scale-95">按鈕 4</button>
+    </div>
+
+    <div id="status-msg" class="mt-6 text-xl text-blue-700 font-semibold h-8 text-center">
+        請先啟動攝影機以開始遊戲
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const statusMsg = document.getElementById('status-msg');
+        
+        const initPanel = document.getElementById('init-panel');
+        const startView = document.getElementById('start-view');
+        const errorView = document.getElementById('error-view');
+        const btnStart = document.getElementById('btn-start-camera');
+        const gameUI = document.getElementById('game-ui');
+
+        let score = 0;
+        let currentTargetId = -1;
+        let isSuccess = false;
+        let canScore = false;
+        let handModelLoaded = false;
+
+        const animals = [
+            { id: 0, name: 'Cat', emoji: '🐱' },
+            { id: 1, name: 'Turtle', emoji: '🐢' },
+            { id: 2, name: 'Bird', emoji: '🐦' },
+            { id: 3, name: 'Rabbit', emoji: '🐰' }
+        ];
+
+        const synth = window.speechSynthesis;
+        function speak(text) {
+            if (synth.speaking) synth.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'en-US';
+            utter.rate = 0.8;
+            synth.speak(utter);
+        }
+
+        function playRound(btnIndex) {
+            if (!handModelLoaded) {
+                statusMsg.innerText = "請先成功啟動攝影機！";
+                return;
+            }
+            resetBoxes();
+            currentTargetId = btnIndex;
+            canScore = true;
+            isSuccess = false;
+            
+            const target = animals[currentTargetId];
+            statusMsg.innerText = `聽！正在播放：${target.name}`;
+            speak(target.name);
+            
+            document.getElementById(`target-${currentTargetId}`).classList.add('active');
+        }
+
+        function resetBoxes() {
+            for (let i = 0; i < 4; i++) {
+                const el = document.getElementById(`target-${i}`);
+                if (el) el.classList.remove('active', 'success');
+            }
+        }
+
+        function onResults(results) {
+            const container = document.getElementById('video-container');
+            if (!container) return;
+            
+            canvasElement.width = container.clientWidth;
+            canvasElement.height = container.clientHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            canvasCtx.translate(canvasElement.width, 0);
+            canvasCtx.scale(-1, 1);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.restore();
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    const indexFingerTip = landmarks[8];
+                    const x = (1 - indexFingerTip.x) * canvasElement.width;
+                    const y = indexFingerTip.y * canvasElement.height;
+
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(x, y, 15, 0, 2 * Math.PI);
+                    canvasCtx.fillStyle = isSuccess ? '#34d399' : '#fbbf24';
+                    canvasCtx.fill();
+                    canvasCtx.strokeStyle = 'white';
+                    canvasCtx.lineWidth = 3;
+                    canvasCtx.stroke();
+
+                    if (canScore && currentTargetId !== -1) {
+                        checkCollision(x, y);
+                    }
+                }
+            }
+            canvasCtx.restore();
+        }
+
+        function checkCollision(x, y) {
+            const container = document.getElementById('video-container');
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            const boxSize = 160;
+
+            let hitId = -1;
+            if (x < boxSize && y < boxSize) hitId = 0;
+            if (x > w - boxSize && y < boxSize) hitId = 1;
+            if (x < boxSize && y > h - boxSize) hitId = 2;
+            if (x > w - boxSize && y > h - boxSize) hitId = 3;
+
+            if (hitId === currentTargetId && !isSuccess) {
+                triggerSuccess();
+            }
+        }
+
+        function triggerSuccess() {
+            isSuccess = true;
+            canScore = false;
+            score += 1;
+            scoreElement.innerText = score;
+            
+            const targetEl = document.getElementById(`target-${currentTargetId}`);
+            targetEl.classList.remove('active');
+            targetEl.classList.add('success');
+            
+            statusMsg.innerText = "太棒了！指對了！";
+            speak("Great job!");
+            
+            setTimeout(() => {
+                if (isSuccess) {
+                    resetBoxes();
+                    currentTargetId = -1;
+                    statusMsg.innerText = "點擊按鈕開始下一題";
+                    isSuccess = false;
+                }
+            }, 2000);
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        // 改良後的啟動函式
+        async function startCameraManually() {
+            btnStart.disabled = true;
+            btnStart.innerText = "正在請求權限...";
+            
+            try {
+                // 1. 先用原生 API 請求權限
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 800, height: 600 } 
+                });
+                
+                videoElement.srcObject = stream;
+                await videoElement.play();
+                
+                // 2. 權限通過後，啟動 MediaPipe 循環
+                const camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({image: videoElement});
+                    },
+                    width: 800,
+                    height: 600
+                });
+                
+                await camera.start();
+                
+                // 3. 成功進入遊戲
+                handModelLoaded = true;
+                initPanel.style.display = 'none';
+                gameUI.classList.remove('hidden');
+                statusMsg.innerText = "連線成功！請點擊下方按鈕。";
+                
+            } catch (err) {
+                console.error("Camera System Error:", err);
+                startView.classList.add('hidden');
+                errorView.classList.remove('hidden');
+                statusMsg.innerText = "無法開啟攝影機，請檢查瀏覽器設定。";
+            }
+        }
+
+        btnStart.addEventListener('click', startCameraManually);
+
+        window.addEventListener('resize', () => {
+            const container = document.getElementById('video-container');
+            if (container && canvasElement) {
+                canvasElement.width = container.clientWidth;
+                canvasElement.height = container.clientHeight;
+            }
+        });
+    </script>
+</body>
+</html>
