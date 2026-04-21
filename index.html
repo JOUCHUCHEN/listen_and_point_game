@@ -180,20 +180,34 @@
         let isCameraActive = false;
         let errorCooldown = false; 
 
+        // 定義動物及其對應的發音 MP3
         const animals = [
-            { id: 0, name: 'Cat' },
-            { id: 1, name: 'Turtle' },
-            { id: 2, name: 'Bird' },
-            { id: 3, name: 'Rabbit' }
+            { 
+                id: 0, 
+                name: 'Cat', 
+                audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-1-cat.mp3' 
+            },
+            { 
+                id: 1, 
+                name: 'Turtle', 
+                audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-4-turtle.mp3' 
+            },
+            { 
+                id: 2, 
+                name: 'Bird', 
+                audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-2-bird.mp3' 
+            },
+            { 
+                id: 3, 
+                name: 'Rabbit', 
+                audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-3-rabbit.mp3' 
+            }
         ];
 
-        const synth = window.speechSynthesis;
-        function speak(text) {
-            if (synth.speaking) synth.cancel();
-            const utter = new SpeechSynthesisUtterance(text);
-            utter.lang = 'en-US';
-            utter.rate = 0.8;
-            synth.speak(utter);
+        // 播放單字發音
+        function playWordAudio(url) {
+            const audio = new Audio(url);
+            audio.play().catch(e => console.log("單字語音播放失敗", e));
         }
 
         function playRound(btnIndex) {
@@ -208,7 +222,9 @@
             
             const target = animals[currentTargetId];
             statusMsg.innerText = `題目單字：${target.name}`;
-            speak(target.name);
+            
+            // 替換原本的 TTS，改為播放指定的 MP3
+            playWordAudio(target.audioUrl);
         }
 
         function resetBoxes() {
