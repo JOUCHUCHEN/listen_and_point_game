@@ -14,6 +14,7 @@
             background-color: #f0f9ff;
             font-family: 'Comic Sans MS', 'Chalkboard SE', 'Microsoft JhengHei', sans-serif;
             touch-action: manipulation;
+            overflow-x: hidden;
         }
         .mirror {
             transform: scaleX(-1);
@@ -83,22 +84,45 @@
             height: 100%;
             object-fit: cover;
         }
+
+        /* 橫向提示框樣式 */
+        #landscape-hint {
+            display: none;
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 99px;
+            font-size: 0.875rem;
+            z-index: 100;
+            white-space: nowrap;
+        }
+        @media screen and (orientation: portrait) and (max-width: 1024px) {
+            #landscape-hint {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+        }
     </style>
 </head>
 <body class="flex flex-col items-center justify-start min-h-screen p-2 md:p-4">
 
+    <!-- 橫向模式更佳提示 (僅手機直向顯示) -->
+    <div id="landscape-hint">
+        <span>🔄 轉為橫向模式效果更佳</span>
+    </div>
+
     <!-- 標題區域 -->
     <div class="text-center mb-2 md:mb-6 mt-2">
         <h1 class="text-2xl md:text-4xl font-bold text-blue-600 mb-1">Listen and Point!</h1>
-        <p class="text-gray-600 text-xs md:text-lg">聽聽單字，指向正確的圖片</p>
+        <p class="text-gray-600 text-xs md:text-lg font-medium">聽聽單字發音，指向正確的動物圖片</p>
     </div>
 
-    <!-- 
-        主要內容佈局：
-        1. 預設上下排版 (flex-col)
-        2. 僅在小螢幕橫向模式切換為左右排版 (max-lg:landscape:flex-row)
-        3. 大螢幕 (1920*1080) 維持上下排版 (lg:flex-col) 
-    -->
+    <!-- 主要內容佈局 -->
     <div class="flex flex-col max-lg:landscape:flex-row lg:flex-col items-center justify-center gap-4 w-full max-w-6xl">
         
         <!-- 視訊畫面區塊 -->
@@ -132,8 +156,9 @@
                             </svg>
                         </div>
                         <h2 class="text-lg md:text-2xl font-bold mb-2">啟動互動教學</h2>
-                        <button id="btn-start-camera" class="bg-blue-600 hover:bg-blue-700 text-white text-md md:text-xl font-bold py-2 px-6 md:py-4 md:px-12 rounded-full shadow-xl transition transform active:scale-95">
-                            立即啟動
+                        <p class="text-gray-500 text-sm mb-6">點擊按鈕授權攝影機並解鎖音效</p>
+                        <button id="btn-start-camera" class="bg-blue-600 hover:bg-blue-700 text-white text-md md:text-xl font-bold py-3 px-10 md:py-4 md:px-12 rounded-full shadow-xl transition transform active:scale-95">
+                            立即開始遊戲
                         </button>
                     </div>
                     
@@ -147,18 +172,12 @@
             </div>
             <!-- 狀態提示 -->
             <div id="status-msg" class="mt-2 text-sm md:text-xl text-blue-700 font-semibold h-6 text-center">
-                請點擊按鈕開始
+                請點擊按鈕開始測驗
             </div>
         </div>
 
         <!-- 發音按鈕區塊 -->
         <div class="w-full max-lg:landscape:w-1/3 lg:w-full flex flex-col gap-3 px-2">
-            <!-- 
-                按鈕網格佈局：
-                1. 預設兩欄 (grid-cols-2)
-                2. 僅在小螢幕橫放切換為單欄 (max-lg:landscape:grid-cols-1)
-                3. 大螢幕或電腦版維持四欄 (lg:grid-cols-4)
-            -->
             <div class="grid grid-cols-2 max-lg:landscape:grid-cols-1 lg:grid-cols-4 gap-3 md:gap-6">
                 <button onclick="playRound(0)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 lg:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Cat</button>
                 <button onclick="playRound(1)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 lg:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Turtle</button>
@@ -198,16 +217,22 @@
             { id: 3, name: 'Rabbit', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-3-rabbit.mp3' }
         ];
 
-        function unlockAudio() {
-            audioCorrect.play().then(() => {
-                audioCorrect.pause();
-                audioCorrect.currentTime = 0;
-            }).catch(() => {});
-            
-            audioError.play().then(() => {
-                audioError.pause();
-                audioError.currentTime = 0;
-            }).catch(() => {});
+        // 靜音播放以解鎖所有音軌
+        async function unlockAudio() {
+            try {
+                // 播放一段超短的靜音
+                const silentPlay = () => {
+                    const audio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA== ");
+                    audio.play();
+                };
+                silentPlay();
+                
+                // 預熱音軌
+                audioCorrect.load();
+                audioError.load();
+            } catch (e) {
+                console.log("Audio unlock failed:", e);
+            }
         }
 
         function playWordAudio(url) {
@@ -222,7 +247,7 @@
             currentTargetId = btnIndex;
             canScore = true;
             isSuccess = false;
-            statusMsg.innerText = `Listen: ${animals[currentTargetId].name}`;
+            statusMsg.innerText = `正在播放：${animals[currentTargetId].name}`;
             playWordAudio(animals[currentTargetId].audioUrl);
         }
 
@@ -309,10 +334,10 @@
             canScore = false;
             const targetEl = document.getElementById(`target-${currentTargetId}`);
             targetEl.classList.add('success');
-            statusMsg.innerText = "Great Job!";
+            statusMsg.innerText = "太棒了！答對了！";
             
             audioCorrect.currentTime = 0;
-            audioCorrect.play().catch(e => console.error("Sound blocked"));
+            audioCorrect.play().catch(e => console.error("Correct sound blocked"));
             
             confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
@@ -320,7 +345,7 @@
                 if (isSuccess) {
                     resetBoxes();
                     currentTargetId = -1;
-                    statusMsg.innerText = "Next one?";
+                    statusMsg.innerText = "請點擊下一個單字";
                     isSuccess = false;
                 }
             }, 2000);
@@ -330,10 +355,10 @@
             errorCooldown = true;
             const wrongEl = document.getElementById(`target-${hitId}`);
             wrongEl.classList.add('wrong');
-            statusMsg.innerText = "Try again!";
+            statusMsg.innerText = "不對喔，再試試看！";
             
             audioError.currentTime = 0;
-            audioError.play().catch(e => console.error("Sound blocked"));
+            audioError.play().catch(e => console.error("Error sound blocked"));
 
             setTimeout(() => {
                 wrongEl.classList.remove('wrong');
@@ -341,6 +366,7 @@
             }, 500);
         }
 
+        // 初始化 MediaPipe
         const hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
@@ -354,10 +380,15 @@
 
         hands.onResults(onResults);
 
+        // 改良啟動邏輯
         async function startCamera() {
             btnStart.disabled = true;
-            btnStart.innerText = "啟動中...";
-            unlockAudio();
+            btnStart.innerText = "初始化音訊與模型...";
+            
+            // 1. 同步解鎖音訊
+            await unlockAudio();
+            
+            statusMsg.innerText = "正在連線攝影機...";
             
             try {
                 const constraints = { 
@@ -375,7 +406,7 @@
                     isCameraActive = true;
                     initPanel.style.display = 'none';
                     gameUI.classList.remove('hidden');
-                    statusMsg.innerText = "Ready!";
+                    statusMsg.innerText = "準備就緒！請點擊按鈕測驗。";
                     
                     const processFrame = async () => {
                         if (isCameraActive) {
@@ -389,7 +420,7 @@
                 console.error(err);
                 startView.classList.add('hidden');
                 errorView.classList.remove('hidden');
-                document.getElementById('error-desc').innerText = "請開啟權限並重整。";
+                document.getElementById('error-desc').innerText = "請開啟攝影機權限並重新整理。建議使用 Chrome 或 Safari 瀏覽器。";
             }
         }
 
