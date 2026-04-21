@@ -95,15 +95,15 @@
 
     <!-- 
         主要內容佈局：
-        1. 預設垂直排版 (flex-col)
-        2. 手機橫向模式切換為水平排版 (landscape:flex-row)
-        3. 電腦/大螢幕強制回歸垂直排版 (lg:flex-col) 
+        1. 預設上下排版 (flex-col)
+        2. 僅在小螢幕橫向模式切換為左右排版 (max-lg:landscape:flex-row)
+        3. 大螢幕 (1920*1080) 維持上下排版 (lg:flex-col) 
     -->
-    <div class="flex flex-col landscape:flex-row lg:flex-col items-center justify-center gap-4 w-full max-w-6xl">
+    <div class="flex flex-col max-lg:landscape:flex-row lg:flex-col items-center justify-center gap-4 w-full max-w-6xl">
         
         <!-- 視訊畫面區塊 -->
-        <div class="w-full landscape:w-2/3 lg:w-full flex flex-col items-center">
-            <div id="video-container" class="aspect-video flex items-center justify-center">
+        <div class="w-full max-lg:landscape:w-2/3 lg:w-full flex flex-col items-center">
+            <div id="video-container" class="aspect-video flex items-center justify-center max-w-4xl w-full">
                 <video id="input_video" class="mirror" style="display:none" playsinline muted></video>
                 <canvas id="output_canvas"></canvas>
                 
@@ -152,14 +152,14 @@
         </div>
 
         <!-- 發音按鈕區塊 -->
-        <div class="w-full landscape:w-1/3 lg:w-full flex flex-col gap-3 px-2">
+        <div class="w-full max-lg:landscape:w-1/3 lg:w-full flex flex-col gap-3 px-2">
             <!-- 
                 按鈕網格佈局：
                 1. 預設兩欄 (grid-cols-2)
-                2. 手機橫放改為單欄以適應高度 (landscape:grid-cols-1)
-                3. 電腦版恢復為四欄橫排 (lg:grid-cols-4)
+                2. 僅在小螢幕橫放切換為單欄 (max-lg:landscape:grid-cols-1)
+                3. 大螢幕或電腦版維持四欄 (lg:grid-cols-4)
             -->
-            <div class="grid grid-cols-2 landscape:grid-cols-1 lg:grid-cols-4 gap-3 md:gap-4">
+            <div class="grid grid-cols-2 max-lg:landscape:grid-cols-1 lg:grid-cols-4 gap-3 md:gap-6">
                 <button onclick="playRound(0)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 lg:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Cat</button>
                 <button onclick="playRound(1)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 lg:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Turtle</button>
                 <button onclick="playRound(2)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 lg:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Bird</button>
