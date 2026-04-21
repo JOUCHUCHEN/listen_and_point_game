@@ -23,7 +23,7 @@
             transition: all 0.2s ease;
             border: 4px solid transparent;
             position: absolute;
-            width: 22%; /* 手機上縮小比例 */
+            width: 22%; 
             min-width: 80px;
             max-width: 180px;
             aspect-ratio: 1 / 1;
@@ -69,7 +69,7 @@
             border-radius: 20px;
             overflow: hidden;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            background: #2d3748;
+            background: #000;
         }
         canvas {
             position: absolute;
@@ -99,7 +99,6 @@
         
         <!-- 遊戲區域 UI -->
         <div id="game-ui" class="hidden contents">
-            <!-- 四個角落 -->
             <div id="target-0" class="target-box top-2 left-2 md:top-4 md:left-4 z-10">
                 <img src="https://i.ibb.co/sv1J8yrt/chiemsee2024-cat-1192026-640.jpg" alt="Cat" class="animal-img">
             </div>
@@ -162,8 +161,8 @@
         const gameUI = document.getElementById('game-ui');
 
         const audioCorrect = new Audio('https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/correct.mp3');
-        audioCorrect.volume = 1.0;
         const audioError = new Audio('https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/error.mp3');
+        audioCorrect.volume = 1.0;
         audioError.volume = 1.0;
 
         let currentTargetId = -1;
@@ -178,6 +177,19 @@
             { id: 2, name: 'Bird', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-2-bird.mp3' },
             { id: 3, name: 'Rabbit', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-3-rabbit.mp3' }
         ];
+
+        // 手機版解鎖音訊功能
+        function unlockAudio() {
+            audioCorrect.play().then(() => {
+                audioCorrect.pause();
+                audioCorrect.currentTime = 0;
+            }).catch(() => {});
+            
+            audioError.play().then(() => {
+                audioError.pause();
+                audioError.currentTime = 0;
+            }).catch(() => {});
+        }
 
         function playWordAudio(url) {
             const audio = new Audio(url);
@@ -205,22 +217,38 @@
         function onResults(results) {
             if (!isCameraActive) return;
             const container = document.getElementById('video-container');
-            canvasElement.width = container.clientWidth;
-            canvasElement.height = container.clientHeight;
+            
+            // 同步畫布尺寸
+            const cWidth = container.clientWidth;
+            const cHeight = container.clientHeight;
+            canvasElement.width = cWidth;
+            canvasElement.height = cHeight;
 
             canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.translate(canvasElement.width, 0);
+            canvasCtx.clearRect(0, 0, cWidth, cHeight);
+            
+            // 解決變形問題：使用裁切填滿 (Cover) 邏輯繪製視訊
+            const vWidth = results.image.width;
+            const vHeight = results.image.height;
+            const scale = Math.max(cWidth / vWidth, cHeight / vHeight);
+            const drawWidth = vWidth * scale;
+            const drawHeight = vHeight * scale;
+            const offsetLeft = (cWidth - drawWidth) / 2;
+            const offsetTop = (cHeight - drawHeight) / 2;
+
+            // 鏡像與繪製
+            canvasCtx.translate(cWidth, 0);
             canvasCtx.scale(-1, 1);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, offsetLeft, offsetTop, drawWidth, drawHeight);
             canvasCtx.restore();
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 for (const landmarks of results.multiHandLandmarks) {
                     const indexFingerTip = landmarks[8];
-                    const x = (1 - indexFingerTip.x) * canvasElement.width;
-                    const y = indexFingerTip.y * canvasElement.height;
+                    const x = (1 - indexFingerTip.x) * cWidth;
+                    const y = indexFingerTip.y * cHeight;
 
+                    // 繪製手指追蹤點
                     canvasCtx.beginPath();
                     canvasCtx.arc(x, y, 12, 0, 2 * Math.PI);
                     canvasCtx.fillStyle = isSuccess ? '#34d399' : '#fbbf24';
@@ -244,14 +272,12 @@
                 const targetEl = document.getElementById(`target-${i}`);
                 if (!targetEl) continue;
                 
-                // 取得相對於 container 的目標框位置
                 const targetRect = targetEl.getBoundingClientRect();
                 const relativeTop = targetRect.top - rect.top;
                 const relativeLeft = targetRect.left - rect.left;
                 const relativeBottom = targetRect.bottom - rect.top;
                 const relativeRight = targetRect.right - rect.left;
 
-                // 判斷手指座標是否在框內
                 if (x >= relativeLeft && x <= relativeRight && y >= relativeTop && y <= relativeBottom) {
                     if (i === currentTargetId && !isSuccess) {
                         triggerSuccess();
@@ -269,10 +295,11 @@
             const targetEl = document.getElementById(`target-${currentTargetId}`);
             targetEl.classList.add('success');
             statusMsg.innerText = "Great Job!";
-            audioCorrect.currentTime = 0;
-            audioCorrect.play().catch(e => {});
             
-            // 手機版彩帶特效
+            // 播放正確音效
+            audioCorrect.currentTime = 0;
+            audioCorrect.play().catch(e => console.error("Correct sound blocked:", e));
+            
             confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
             setTimeout(() => {
@@ -290,8 +317,10 @@
             const wrongEl = document.getElementById(`target-${hitId}`);
             wrongEl.classList.add('wrong');
             statusMsg.innerText = "Try again!";
+            
+            // 播放錯誤音效
             audioError.currentTime = 0;
-            audioError.play().catch(e => {});
+            audioError.play().catch(e => console.error("Error sound blocked:", e));
 
             setTimeout(() => {
                 wrongEl.classList.remove('wrong');
@@ -316,8 +345,10 @@
             btnStart.disabled = true;
             btnStart.innerText = "啟動中...";
             
+            // 解鎖手機版音訊
+            unlockAudio();
+            
             try {
-                // 請求最高優先級
                 const constraints = { 
                     video: { 
                         facingMode: "user",
@@ -353,7 +384,6 @@
 
         btnStart.addEventListener('click', startCamera);
 
-        // 監聽尺寸變化以調整偵測區域
         window.addEventListener('resize', () => {
             const container = document.getElementById('video-container');
             if (container && canvasElement) {
