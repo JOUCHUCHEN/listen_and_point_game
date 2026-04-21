@@ -2,45 +2,56 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>互動式聽音指圖遊戲</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             background-color: #f0f9ff;
-            overflow: hidden;
             font-family: 'Comic Sans MS', 'Chalkboard SE', 'Microsoft JhengHei', sans-serif;
+            touch-action: manipulation;
         }
         .mirror {
             transform: scaleX(-1);
         }
+        /* 響應式目標框 */
         .target-box {
             transition: all 0.2s ease;
-            border: 6px solid transparent;
+            border: 4px solid transparent;
             position: absolute;
-            width: 180px;
-            height: 180px;
+            width: 22%; /* 手機上縮小比例 */
+            min-width: 80px;
+            max-width: 180px;
+            aspect-ratio: 1 / 1;
             overflow: hidden;
-            border-radius: 20px;
+            border-radius: 15%;
             background-color: white;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
-        /* 指對了的效果：綠色外框與放大 */
+        
+        @media (min-width: 768px) {
+            .target-box {
+                border-width: 6px;
+                width: 25%;
+            }
+        }
+
         .target-box.success {
             border-color: #34d399;
             background-color: rgba(52, 211, 153, 0.4);
-            transform: scale(1.1);
-            z-index: 20;
+            transform: scale(1.15);
+            z-index: 30;
         }
-        /* 指錯了的效果：紅色外框與抖動 */
+        
         .target-box.wrong {
             border-color: #ef4444;
             background-color: rgba(239, 68, 68, 0.2);
             animation: shake 0.4s ease-in-out;
-            z-index: 20;
+            z-index: 30;
         }
         
         @keyframes shake {
@@ -53,12 +64,12 @@
         #video-container {
             position: relative;
             width: 100%;
-            max-width: 900px;
+            max-width: 800px;
             margin: 0 auto;
-            border-radius: 24px;
+            border-radius: 20px;
             overflow: hidden;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            background: #d1d5db;
+            background: #2d3748;
         }
         canvas {
             position: absolute;
@@ -71,18 +82,15 @@
         .animal-img {
             width: 100%;
             height: 100%;
-            /* 修正：使用 object-fit: cover 確保圖片不變形地填滿正方形 */
             object-fit: cover;
-            border-radius: 12px;
         }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-4">
+<body class="flex flex-col items-center justify-start min-h-screen p-2 md:p-4">
 
-    <div class="text-center mb-6">
-        <h1 class="text-4xl font-bold text-blue-600 mb-2">Listen and Point!</h1>
-        <p class="text-gray-600 text-lg">聽聽單字發音，指向正確的動物圖片</p>
-        <div class="mt-2 text-2xl font-bold text-orange-500">得分: <span id="score">0</span></div>
+    <div class="text-center mb-4 md:mb-6 mt-2">
+        <h1 class="text-3xl md:text-4xl font-bold text-blue-600 mb-1">Listen and Point!</h1>
+        <p class="text-gray-600 text-sm md:text-lg">聽聽單字，指向正確的圖片</p>
     </div>
 
     <div id="video-container" class="aspect-video flex items-center justify-center">
@@ -91,140 +99,100 @@
         
         <!-- 遊戲區域 UI -->
         <div id="game-ui" class="hidden contents">
-            <!-- 左上角: Cat -->
-            <div id="target-0" class="target-box top-4 left-4 pointer-events-none z-10">
+            <!-- 四個角落 -->
+            <div id="target-0" class="target-box top-2 left-2 md:top-4 md:left-4 z-10">
                 <img src="https://i.ibb.co/sv1J8yrt/chiemsee2024-cat-1192026-640.jpg" alt="Cat" class="animal-img">
             </div>
-            <!-- 右上角: Turtle -->
-            <div id="target-1" class="target-box top-4 right-4 pointer-events-none z-10">
+            <div id="target-1" class="target-box top-2 right-2 md:top-4 md:right-4 z-10">
                 <img src="https://i.ibb.co/GvS5ZZFv/pexels-turtle-1850190-640.jpg" alt="Turtle" class="animal-img">
             </div>
-            <!-- 左下角: Bird -->
-            <div id="target-2" class="target-box bottom-4 left-4 pointer-events-none z-10">
+            <div id="target-2" class="target-box bottom-2 left-2 md:bottom-4 md:left-4 z-10">
                 <img src="https://i.ibb.co/5XJQMrtt/balouriarajesh-indian-chat-7704561-640.jpg" alt="Bird" class="animal-img">
             </div>
-            <!-- 右下角: Rabbit -->
-            <div id="target-3" class="target-box bottom-4 right-4 pointer-events-none z-10">
+            <div id="target-3" class="target-box bottom-2 right-2 md:bottom-4 md:right-4 z-10">
                 <img src="https://i.ibb.co/mFrK8p4M/vijakob-rabbits-5132644-640.jpg" alt="Rabbit" class="animal-img">
             </div>
         </div>
 
         <!-- 啟動面板 -->
-        <div id="init-panel" class="absolute inset-0 bg-white bg-opacity-95 flex flex-col items-center justify-center z-20 p-6 text-center">
+        <div id="init-panel" class="absolute inset-0 bg-white bg-opacity-95 flex flex-col items-center justify-center z-40 p-4 text-center">
             <div id="start-view">
-                <div class="mb-6 text-blue-500">
-                    <svg class="w-20 h-20 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="mb-4 text-blue-500">
+                    <svg class="w-16 h-16 md:w-20 md:h-20 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                     </svg>
                 </div>
-                <h2 class="text-2xl font-bold mb-4">AI 互動教學系統</h2>
-                <p class="text-gray-600 mb-8">準備好後，請點擊按鈕啟動攝影機。<br>當學生指對時會有特效音並獲得分數。</p>
-                <button id="btn-start-camera" class="bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold py-4 px-12 rounded-full shadow-xl transition transform hover:scale-105 active:scale-95">
-                    立即開始
+                <h2 class="text-xl md:text-2xl font-bold mb-2">準備開始互動教學</h2>
+                <p class="text-gray-600 text-sm md:text-base mb-6">請點擊下方按鈕啟動攝影機。<br>建議將手機橫放使用，效果更佳！</p>
+                <button id="btn-start-camera" class="bg-blue-600 hover:bg-blue-700 text-white text-lg md:text-xl font-bold py-3 px-8 md:py-4 md:px-12 rounded-full shadow-xl transition transform active:scale-95">
+                    立即啟動
                 </button>
             </div>
             
-            <!-- 錯誤提示 -->
-            <div id="error-view" class="hidden">
-                <div class="text-red-500 text-6xl mb-4">⚠️</div>
-                <h2 id="error-title" class="text-2xl font-bold text-gray-800 mb-2">攝影機啟動失敗</h2>
-                <div id="error-desc" class="bg-red-50 p-4 rounded-lg text-left text-gray-700 text-sm mb-6 max-w-md"></div>
-                <button onclick="location.reload()" class="bg-gray-800 hover:bg-black text-white font-bold py-3 px-10 rounded-full transition shadow-md">
-                    重試一次
-                </button>
+            <div id="error-view" class="hidden p-4">
+                <div class="text-red-500 text-5xl mb-2">⚠️</div>
+                <h2 id="error-title" class="text-lg font-bold text-gray-800 mb-1">攝影機啟動失敗</h2>
+                <div id="error-desc" class="text-gray-700 text-xs md:text-sm mb-4"></div>
+                <button onclick="location.reload()" class="bg-gray-800 text-white py-2 px-6 rounded-full">重試一次</button>
             </div>
         </div>
     </div>
 
-    <!-- 控制按鈕區域 -->
-    <div class="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6 w-full max-w-4xl">
-        <button onclick="playRound(0)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-5 px-4 rounded-2xl shadow-lg transition transform active:scale-95 text-3xl">
-            Cat
-        </button>
-        <button onclick="playRound(1)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-5 px-4 rounded-2xl shadow-lg transition transform active:scale-95 text-3xl">
-            Turtle
-        </button>
-        <button onclick="playRound(2)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-5 px-4 rounded-2xl shadow-lg transition transform active:scale-95 text-3xl">
-            Bird
-        </button>
-        <button onclick="playRound(3)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-5 px-4 rounded-2xl shadow-lg transition transform active:scale-95 text-3xl">
-            Rabbit
-        </button>
+    <!-- 按鈕區域 -->
+    <div class="mt-4 md:mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 w-full max-w-4xl px-2">
+        <button onclick="playRound(0)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 md:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Cat</button>
+        <button onclick="playRound(1)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 md:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Turtle</button>
+        <button onclick="playRound(2)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 md:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Bird</button>
+        <button onclick="playRound(3)" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 md:py-6 rounded-2xl shadow-lg transition transform active:scale-95 text-xl md:text-3xl">Rabbit</button>
     </div>
 
-    <div id="status-msg" class="mt-6 text-xl text-blue-700 font-semibold h-8 text-center">
-        等待啟動中...
+    <div id="status-msg" class="mt-4 text-base md:text-xl text-blue-700 font-semibold h-6 text-center">
+        請啟動攝影機
     </div>
 
     <script>
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const scoreElement = document.getElementById('score');
         const statusMsg = document.getElementById('status-msg');
-        
         const initPanel = document.getElementById('init-panel');
         const startView = document.getElementById('start-view');
         const errorView = document.getElementById('error-view');
         const btnStart = document.getElementById('btn-start-camera');
         const gameUI = document.getElementById('game-ui');
 
-        // 音效連結
         const audioCorrect = new Audio('https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/correct.mp3');
+        audioCorrect.volume = 1.0;
         const audioError = new Audio('https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/error.mp3');
+        audioError.volume = 1.0;
 
-        let score = 0;
         let currentTargetId = -1;
         let isSuccess = false;
         let canScore = false;
         let isCameraActive = false;
         let errorCooldown = false; 
 
-        // 定義動物及其對應的發音 MP3
         const animals = [
-            { 
-                id: 0, 
-                name: 'Cat', 
-                audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-1-cat.mp3' 
-            },
-            { 
-                id: 1, 
-                name: 'Turtle', 
-                audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-4-turtle.mp3' 
-            },
-            { 
-                id: 2, 
-                name: 'Bird', 
-                audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-2-bird.mp3' 
-            },
-            { 
-                id: 3, 
-                name: 'Rabbit', 
-                audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-3-rabbit.mp3' 
-            }
+            { id: 0, name: 'Cat', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-1-cat.mp3' },
+            { id: 1, name: 'Turtle', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-4-turtle.mp3' },
+            { id: 2, name: 'Bird', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-2-bird.mp3' },
+            { id: 3, name: 'Rabbit', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-3-rabbit.mp3' }
         ];
 
-        // 播放單字發音
         function playWordAudio(url) {
             const audio = new Audio(url);
-            audio.play().catch(e => console.log("單字語音播放失敗", e));
+            audio.volume = 1.0;
+            audio.play().catch(e => console.log("Audio failed", e));
         }
 
         function playRound(btnIndex) {
-            if (!isCameraActive) {
-                statusMsg.innerText = "請先啟動攝影機！";
-                return;
-            }
+            if (!isCameraActive) return;
             resetBoxes();
             currentTargetId = btnIndex;
             canScore = true;
             isSuccess = false;
-            
-            const target = animals[currentTargetId];
-            statusMsg.innerText = `題目單字：${target.name}`;
-            
-            // 替換原本的 TTS，改為播放指定的 MP3
-            playWordAudio(target.audioUrl);
+            statusMsg.innerText = `Listen: ${animals[currentTargetId].name}`;
+            playWordAudio(animals[currentTargetId].audioUrl);
         }
 
         function resetBoxes() {
@@ -236,7 +204,6 @@
 
         function onResults(results) {
             if (!isCameraActive) return;
-
             const container = document.getElementById('video-container');
             canvasElement.width = container.clientWidth;
             canvasElement.height = container.clientHeight;
@@ -254,9 +221,8 @@
                     const x = (1 - indexFingerTip.x) * canvasElement.width;
                     const y = indexFingerTip.y * canvasElement.height;
 
-                    // 繪製手指追蹤點
                     canvasCtx.beginPath();
-                    canvasCtx.arc(x, y, 15, 0, 2 * Math.PI);
+                    canvasCtx.arc(x, y, 12, 0, 2 * Math.PI);
                     canvasCtx.fillStyle = isSuccess ? '#34d399' : '#fbbf24';
                     canvasCtx.fill();
                     canvasCtx.strokeStyle = 'white';
@@ -272,21 +238,27 @@
 
         function checkCollision(x, y) {
             const container = document.getElementById('video-container');
-            const w = container.clientWidth;
-            const h = container.clientHeight;
-            const boxSize = 180; 
+            const rect = container.getBoundingClientRect();
+            
+            for (let i = 0; i < 4; i++) {
+                const targetEl = document.getElementById(`target-${i}`);
+                if (!targetEl) continue;
+                
+                // 取得相對於 container 的目標框位置
+                const targetRect = targetEl.getBoundingClientRect();
+                const relativeTop = targetRect.top - rect.top;
+                const relativeLeft = targetRect.left - rect.left;
+                const relativeBottom = targetRect.bottom - rect.top;
+                const relativeRight = targetRect.right - rect.left;
 
-            let hitId = -1;
-            if (x < boxSize && y < boxSize) hitId = 0; // 左上
-            else if (x > w - boxSize && y < boxSize) hitId = 1; // 右上
-            else if (x < boxSize && y > h - boxSize) hitId = 2; // 左下
-            else if (x > w - boxSize && y > h - boxSize) hitId = 3; // 右下
-
-            if (hitId !== -1) {
-                if (hitId === currentTargetId && !isSuccess) {
-                    triggerSuccess();
-                } else if (hitId !== currentTargetId && !isSuccess && !errorCooldown) {
-                    triggerError(hitId);
+                // 判斷手指座標是否在框內
+                if (x >= relativeLeft && x <= relativeRight && y >= relativeTop && y <= relativeBottom) {
+                    if (i === currentTargetId && !isSuccess) {
+                        triggerSuccess();
+                    } else if (i !== currentTargetId && !isSuccess && !errorCooldown) {
+                        triggerError(i);
+                    }
+                    return;
                 }
             }
         }
@@ -294,22 +266,20 @@
         function triggerSuccess() {
             isSuccess = true;
             canScore = false;
-            score += 1;
-            scoreElement.innerText = score;
-            
             const targetEl = document.getElementById(`target-${currentTargetId}`);
             targetEl.classList.add('success');
-            
-            statusMsg.innerText = "太棒了！答對了！";
-            
+            statusMsg.innerText = "Great Job!";
             audioCorrect.currentTime = 0;
-            audioCorrect.play().catch(e => console.log("Audio error", e));
+            audioCorrect.play().catch(e => {});
             
+            // 手機版彩帶特效
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+
             setTimeout(() => {
                 if (isSuccess) {
                     resetBoxes();
                     currentTargetId = -1;
-                    statusMsg.innerText = "請點擊下一個單字";
+                    statusMsg.innerText = "Next one?";
                     isSuccess = false;
                 }
             }, 2000);
@@ -319,11 +289,9 @@
             errorCooldown = true;
             const wrongEl = document.getElementById(`target-${hitId}`);
             wrongEl.classList.add('wrong');
-            
-            statusMsg.innerText = "再試試看！";
-            
+            statusMsg.innerText = "Try again!";
             audioError.currentTime = 0;
-            audioError.play().catch(e => console.log("Audio error", e));
+            audioError.play().catch(e => {});
 
             setTimeout(() => {
                 wrongEl.classList.remove('wrong');
@@ -338,25 +306,26 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
         });
 
         hands.onResults(onResults);
 
         async function startCamera() {
             btnStart.disabled = true;
-            btnStart.innerText = "正在連線...";
+            btnStart.innerText = "啟動中...";
             
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                showError("系統限制", "您的瀏覽器不支援攝影機存取。");
-                return;
-            }
-
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1280, height: 720, facingMode: "user" } 
-                });
+                // 請求最高優先級
+                const constraints = { 
+                    video: { 
+                        facingMode: "user",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 videoElement.srcObject = stream;
                 
                 videoElement.onloadedmetadata = () => {
@@ -364,7 +333,7 @@
                     isCameraActive = true;
                     initPanel.style.display = 'none';
                     gameUI.classList.remove('hidden');
-                    statusMsg.innerText = "連線成功！點擊按鈕開始測驗。";
+                    statusMsg.innerText = "Ready! Click a button.";
                     
                     const processFrame = async () => {
                         if (isCameraActive) {
@@ -375,19 +344,16 @@
                     processFrame();
                 };
             } catch (err) {
-                showError("權限拒絕", "請允許攝影機使用權限並重新整理頁面。");
+                console.error(err);
+                startView.classList.add('hidden');
+                errorView.classList.remove('hidden');
+                document.getElementById('error-desc').innerText = "請確認已開啟攝影機權限並重新整理。";
             }
-        }
-
-        function showError(title, desc) {
-            startView.classList.add('hidden');
-            errorView.classList.remove('hidden');
-            document.getElementById('error-title').innerText = title;
-            document.getElementById('error-desc').innerHTML = `<p>${desc}</p>`;
         }
 
         btnStart.addEventListener('click', startCamera);
 
+        // 監聽尺寸變化以調整偵測區域
         window.addEventListener('resize', () => {
             const container = document.getElementById('video-container');
             if (container && canvasElement) {
