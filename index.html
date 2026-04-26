@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Listen and Point - Interactive Learning Game</title>
+    <title>K1 H91-92 Listen and Point</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -100,6 +100,7 @@
             background-color: transparent !important;
             box-shadow: none;
             overflow: visible;
+            /* 移除背景與邊框的過渡動畫，防止閃爍 */
             transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.3s;
         }
 
@@ -279,7 +280,7 @@
         let audioCtx = null;
         const audioBufferCache = {}; 
 
-        // 更新背景音樂
+        // 背景音樂
         const bgmAudio = new Audio('https://raw.githubusercontent.com/JOUCHUCHEN/K1_H91-92_listen_and_point/main/bgm.mp3');
         bgmAudio.loop = true;
 
@@ -287,7 +288,7 @@
         const WORD_BOOST = 2.5;     
         const FEEDBACK_BOOST = 2.0; 
 
-        // 更新反饋音效
+        // 反饋音效
         const feedbackSounds = {
             correctFX: 'https://raw.githubusercontent.com/JOUCHUCHEN/K1_H91-92_listen_and_point/main/correct.mp3',
             errorFX: 'https://raw.githubusercontent.com/JOUCHUCHEN/K1_H91-92_listen_and_point/main/error.mp3',
@@ -304,6 +305,14 @@
             { id: 3, src: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-3-rabbit.mp3' }
         ];
 
+        // 圖片 URL 列表
+        const level2Images = [
+            'https://i.ibb.co/H847XD1/cat-walk.gif',
+            'https://i.ibb.co/7dvB3gTs/turtle-2.png',
+            'https://i.ibb.co/m5j29Bk5/bird-fly.gif',
+            'https://i.ibb.co/8DHRPsyk/rabbit-run.gif'
+        ];
+
         function applyInitialVolumes() {
             bgmAudio.volume = BGM_VOL;
         }
@@ -317,21 +326,32 @@
         let isBgmPlaying = true;
         let isLevel2 = false;
 
-        async function preLoadAllAudios() {
+        // 預載音訊與圖片
+        async function preLoadAssets() {
+            // 預載音訊
             if (!audioCtx) audioCtx = new AudioCtx();
             const allSources = [...animals.map(a => a.src), ...Object.values(feedbackSounds)];
-            const loadPromises = allSources.map(async (src) => {
+            const audioPromises = allSources.map(async (src) => {
                 if (audioBufferCache[src]) return;
                 try {
                     const response = await fetch(src);
                     const arrayBuffer = await response.arrayBuffer();
                     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
                     audioBufferCache[src] = audioBuffer;
-                } catch (e) {
-                    console.error("Failed to preload audio:", src, e);
-                }
+                } catch (e) {}
             });
-            await Promise.all(loadPromises);
+
+            // 預載 Level 2 圖片與 GIF
+            const imagePromises = level2Images.map(src => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.src = src;
+                    img.onload = resolve;
+                    img.onerror = resolve; // 即使出錯也繼續
+                });
+            });
+
+            await Promise.all([...audioPromises, ...imagePromises]);
         }
 
         function playBoostedAudio(url, boostLevel) {
@@ -381,7 +401,7 @@
             if (isLevel2) {
                 btn.innerHTML = 'Level 1 🏠';
                 btn.classList.replace('bg-[#8b5cf6]', 'bg-[#3b82f6]');
-                // 更新第二關動態圖片
+                // 更新第二關動態圖片 (已預載)
                 document.querySelector('#target-0 .animal-img').src = 'https://i.ibb.co/H847XD1/cat-walk.gif';
                 document.querySelector('#target-1 .animal-img').src = 'https://i.ibb.co/7dvB3gTs/turtle-2.png'; 
                 document.querySelector('#target-2 .animal-img').src = 'https://i.ibb.co/m5j29Bk5/bird-fly.gif';
@@ -543,7 +563,8 @@
 
         async function startCamera() {
             btnStart.disabled = true; unlockAudio();
-            await preLoadAllAudios();
+            // 啟動相機時同步預載所有資源（含 Level 2 圖片）
+            await preLoadAssets();
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 1280, height: 720 } });
                 videoElement.srcObject = stream;
