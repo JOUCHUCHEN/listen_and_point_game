@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>互動式聽音指圖遊戲 - 可愛幼兒版</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&display=swap');
+
+        body {
+            background: linear-gradient(180deg, #e0f2fe 0%, #f0f9ff 100%);
+            font-family: 'Quicksand', 'Microsoft JhengHei', sans-serif;
+            touch-action: manipulation;
+            overflow-x: hidden;
+            color: #475569;
+        }
+
+        .mirror {
+            transform: scaleX(-1);
+        }
+
+        /* 像泡泡一樣的目標框 */
+        .target-box {
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 8px solid white;
+            position: absolute;
+            width: 24%; 
+            min-width: 70px;
+            max-width: 160px;
+            aspect-ratio: 1 / 1;
+            overflow: hidden;
+            border-radius: 30px;
+            background-color: white;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+        
+        @media (min-width: 768px) {
+            .target-box {
+                border-width: 10px;
+                width: 26%;
+                max-width: 190px;
+            }
+        }
+
+        /* 答對時的跳動動畫 */
+        .target-box.success {
+            border-color: #4ade80;
+            background-color: rgba(74, 222, 128, 0.2);
+            transform: scale(1.15) rotate(5deg);
+            z-index: 30;
+            animation: bounce 0.5s ease infinite alternate;
+        }
+        
+        @keyframes bounce {
+            from { transform: scale(1.1) rotate(5deg); }
+            to { transform: scale(1.2) rotate(-5deg); }
+        }
+
+        /* 答錯時的震動 */
+        .target-box.wrong {
+            border-color: #fb7185;
+            background-color: rgba(251, 113, 133, 0.1);
+            animation: shake 0.4s ease-in-out;
+            z-index: 30;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-10px); }
+            40% { transform: translateX(10px); }
+            60% { transform: translateX(-10px); }
+            80% { transform: translateX(10px); }
+        }
+
+        #video-container {
+            position: relative;
+            width: 100%;
+            border-radius: 40px;
+            border: 12px solid #bae6fd;
+            overflow: hidden;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            background: #334155;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+        }
+
+        .animal-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 雲朵裝飾 */
+        .cloud {
+            position: fixed;
+            z-index: -1;
+            opacity: 0.6;
+            animation: float 20s linear infinite;
+        }
+        @keyframes float {
+            from { transform: translateX(-100px); }
+            to { transform: translateX(calc(100vw + 100px)); }
+        }
+
+        /* 橫向模式提示 */
+        #landscape-hint {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fbbf24;
+            color: #92400e;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        @media screen and (orientation: portrait) and (max-width: 1024px) {
+            #landscape-hint { display: flex; align-items: center; gap: 8px; }
+        }
+
+        /* 糖果風格按鈕 */
+        .candy-btn {
+            border-bottom: 6px solid rgba(0,0,0,0.2);
+            transition: all 0.1s;
+        }
+        .candy-btn:active {
+            border-bottom-width: 0px;
+            transform: translateY(6px) scale(0.95);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-start min-h-screen p-3 md:p-6">
+
+    <!-- 背景裝飾 -->
+    <svg class="cloud top-10" width="100" height="60" viewBox="0 0 100 60"><path fill="white" d="M20,40 Q0,40 0,25 Q0,10 20,10 Q25,0 45,0 Q65,0 70,15 Q95,15 95,35 Q95,55 70,55 L20,55 Z"/></svg>
+    <svg class="cloud top-40" style="animation-delay: -10s" width="150" height="80" viewBox="0 0 100 60"><path fill="white" d="M20,40 Q0,40 0,25 Q0,10 20,10 Q25,0 45,0 Q65,0 70,15 Q95,15 95,35 Q95,55 70,55 L20,55 Z"/></svg>
+
+    <div id="landscape-hint">
+        <span>💫 橫著拿效果更棒喔！</span>
+    </div>
+
+    <!-- 標題區域 -->
+    <div class="text-center mb-4 md:mb-8 mt-2">
+        <h1 class="text-4xl md:text-6xl font-black text-blue-500 mb-2 drop-shadow-sm">Listen & Point</h1>
+        <p class="text-blue-400 text-lg md:text-2xl font-bold italic">找找看，動物在哪裡？</p>
+    </div>
+
+    <!-- 主要內容佈局 -->
+    <div class="flex flex-col max-lg:landscape:flex-row lg:flex-col items-center justify-center gap-6 w-full max-w-7xl">
+        
+        <!-- 視訊畫面區塊 -->
+        <div class="w-full max-lg:landscape:w-3/5 lg:w-full flex flex-col items-center">
+            <div id="video-container" class="aspect-video flex items-center justify-center max-w-5xl w-full">
+                <!-- 優化 video 標籤屬性 -->
+                <video id="input_video" class="mirror" style="display:none" playsinline muted autoplay></video>
+                <canvas id="output_canvas"></canvas>
+                
+                <!-- 遊戲區域 UI -->
+                <div id="game-ui" class="hidden contents">
+                    <div id="target-0" class="target-box top-3 left-3 md:top-6 md:left-6 z-10">
+                        <img src="https://i.ibb.co/sv1J8yrt/chiemsee2024-cat-1192026-640.jpg" alt="Cat" class="animal-img">
+                    </div>
+                    <div id="target-1" class="target-box top-3 right-3 md:top-6 md:right-6 z-10">
+                        <img src="https://i.ibb.co/GvS5ZZFv/pexels-turtle-1850190-640.jpg" alt="Turtle" class="animal-img">
+                    </div>
+                    <div id="target-2" class="target-box bottom-3 left-3 md:bottom-6 md:left-6 z-10">
+                        <img src="https://i.ibb.co/5XJQMrtt/balouriarajesh-indian-chat-7704561-640.jpg" alt="Bird" class="animal-img">
+                    </div>
+                    <div id="target-3" class="target-box bottom-3 right-3 md:bottom-6 md:right-6 z-10">
+                        <img src="https://i.ibb.co/mFrK8p4M/vijakob-rabbits-5132644-640.jpg" alt="Rabbit" class="animal-img">
+                    </div>
+                </div>
+
+                <!-- 啟動面板 -->
+                <div id="init-panel" class="absolute inset-0 bg-white/90 flex flex-col items-center justify-center z-40 p-6 text-center">
+                    <div id="start-view" class="flex flex-col items-center">
+                        <div class="w-32 h-32 bg-blue-100 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                            <span class="text-6xl">✨</span>
+                        </div>
+                        <h2 class="text-3xl md:text-5xl font-black text-blue-600 mb-4">準備好了嗎？</h2>
+                        <p class="text-blue-400 text-lg md:text-xl mb-8">讓我們一起來玩遊戲！</p>
+                        <button id="btn-start-camera" class="candy-btn bg-orange-400 hover:bg-orange-500 text-white text-2xl md:text-4xl font-black py-4 px-12 md:py-6 md:px-20 rounded-full shadow-2xl transition">
+                            GO !
+                        </button>
+                    </div>
+                    
+                    <div id="error-view" class="hidden p-4">
+                        <div class="text-red-400 text-6xl mb-4">😿</div>
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">相機打不開...</h2>
+                        <p id="error-desc" class="text-gray-500 mb-6"></p>
+                        <button onclick="location.reload()" class="bg-blue-400 text-white py-3 px-8 rounded-full font-bold">再試一次</button>
+                    </div>
+                </div>
+            </div>
+            <!-- 狀態提示 -->
+            <div id="status-msg" class="mt-4 text-xl md:text-3xl text-orange-500 font-black h-10 text-center tracking-wide">
+                點選下面開始測驗喔！
+            </div>
+        </div>
+
+        <!-- 發音按鈕區塊 -->
+        <div class="w-full max-lg:landscape:w-2/5 lg:w-full flex flex-col gap-4 px-2">
+            <div class="grid grid-cols-2 max-lg:landscape:grid-cols-1 lg:grid-cols-4 gap-4 md:gap-8">
+                <button onclick="playRound(0)" class="candy-btn bg-pink-400 hover:bg-pink-500 text-white font-black py-5 md:py-8 rounded-3xl shadow-lg text-2xl md:text-5xl">Cat</button>
+                <button onclick="playRound(1)" class="candy-btn bg-emerald-400 hover:bg-emerald-500 text-white font-black py-5 md:py-8 rounded-3xl shadow-lg text-2xl md:text-5xl">Turtle</button>
+                <button onclick="playRound(2)" class="candy-btn bg-amber-400 hover:bg-amber-500 text-white font-black py-5 md:py-8 rounded-3xl shadow-lg text-2xl md:text-5xl">Bird</button>
+                <button onclick="playRound(3)" class="candy-btn bg-purple-400 hover:bg-purple-500 text-white font-black py-5 md:py-8 rounded-3xl shadow-lg text-2xl md:text-5xl">Rabbit</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const statusMsg = document.getElementById('status-msg');
+        const initPanel = document.getElementById('init-panel');
+        const startView = document.getElementById('start-view');
+        const errorView = document.getElementById('error-view');
+        const btnStart = document.getElementById('btn-start-camera');
+        const gameUI = document.getElementById('game-ui');
+
+        const audioCorrect = new Audio('https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/correct.mp3');
+        const audioError = new Audio('https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/error.mp3');
+        audioCorrect.volume = 1.0;
+        audioError.volume = 1.0;
+
+        let currentTargetId = -1;
+        let isSuccess = false;
+        let canScore = false;
+        let isCameraActive = false;
+        let errorCooldown = false; 
+
+        const animals = [
+            { id: 0, name: 'Cat', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-1-cat.mp3' },
+            { id: 1, name: 'Turtle', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-4-turtle.mp3' },
+            { id: 2, name: 'Bird', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-2-bird.mp3' },
+            { id: 3, name: 'Rabbit', audioUrl: 'https://raw.githubusercontent.com/JOUCHUCHEN/listen_and_point/main/30-3-rabbit.mp3' }
+        ];
+
+        // 靜音播放法解鎖音訊 (非阻塞型)
+        function unlockAudio() {
+            const silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA== ");
+            silent.play().catch(() => {});
+            audioCorrect.load();
+            audioError.load();
+        }
+
+        function playWordAudio(url) {
+            const audio = new Audio(url);
+            audio.volume = 1.0;
+            audio.play().catch(e => console.log("播放失敗"));
+        }
+
+        function playRound(btnIndex) {
+            if (!isCameraActive) return;
+            resetBoxes();
+            currentTargetId = btnIndex;
+            canScore = true;
+            isSuccess = false;
+            statusMsg.innerText = `耳朵聽聽：${animals[currentTargetId].name}`;
+            playWordAudio(animals[currentTargetId].audioUrl);
+        }
+
+        function resetBoxes() {
+            for (let i = 0; i < 4; i++) {
+                const el = document.getElementById(`target-${i}`);
+                if (el) el.classList.remove('success', 'wrong');
+            }
+        }
+
+        function onResults(results) {
+            if (!isCameraActive) return;
+            const container = document.getElementById('video-container');
+            const cWidth = container.clientWidth;
+            const cHeight = container.clientHeight;
+            if (canvasElement.width !== cWidth) canvasElement.width = cWidth;
+            if (canvasElement.height !== cHeight) canvasElement.height = cHeight;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, cWidth, cHeight);
+            
+            const vWidth = results.image.width;
+            const vHeight = results.image.height;
+            const scale = Math.max(cWidth / vWidth, cHeight / vHeight);
+            const drawWidth = vWidth * scale;
+            const drawHeight = vHeight * scale;
+            const offsetLeft = (cWidth - drawWidth) / 2;
+            const offsetTop = (cHeight - drawHeight) / 2;
+
+            canvasCtx.translate(cWidth, 0);
+            canvasCtx.scale(-1, 1);
+            canvasCtx.drawImage(results.image, offsetLeft, offsetTop, drawWidth, drawHeight);
+            canvasCtx.restore();
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    const indexFingerTip = landmarks[8];
+                    const x = (1 - indexFingerTip.x) * cWidth;
+                    const y = indexFingerTip.y * cHeight;
+
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(x, y, 15, 0, 2 * Math.PI);
+                    canvasCtx.fillStyle = isSuccess ? '#4ade80' : '#fbbf24';
+                    canvasCtx.shadowBlur = 10;
+                    canvasCtx.shadowColor = 'white';
+                    canvasCtx.fill();
+                    canvasCtx.strokeStyle = 'white';
+                    canvasCtx.lineWidth = 4;
+                    canvasCtx.stroke();
+
+                    if (canScore && currentTargetId !== -1) {
+                        checkCollision(x, y);
+                    }
+                }
+            }
+        }
+
+        function checkCollision(x, y) {
+            const container = document.getElementById('video-container');
+            const rect = container.getBoundingClientRect();
+            
+            for (let i = 0; i < 4; i++) {
+                const targetEl = document.getElementById(`target-${i}`);
+                if (!targetEl) continue;
+                
+                const targetRect = targetEl.getBoundingClientRect();
+                const relativeTop = targetRect.top - rect.top;
+                const relativeLeft = targetRect.left - rect.left;
+                const relativeBottom = targetRect.bottom - rect.top;
+                const relativeRight = targetRect.right - rect.left;
+
+                if (x >= relativeLeft && x <= relativeRight && y >= relativeTop && y <= relativeBottom) {
+                    if (i === currentTargetId && !isSuccess) {
+                        triggerSuccess();
+                    } else if (i !== currentTargetId && !isSuccess && !errorCooldown) {
+                        triggerError(i);
+                    }
+                    return;
+                }
+            }
+        }
+
+        function triggerSuccess() {
+            isSuccess = true;
+            canScore = false;
+            const targetEl = document.getElementById(`target-${currentTargetId}`);
+            targetEl.classList.add('success');
+            statusMsg.innerText = "太棒了！🌟 好厲害！";
+            
+            audioCorrect.currentTime = 0;
+            audioCorrect.play().catch(() => {});
+            
+            confetti({ 
+                particleCount: 150, 
+                spread: 80, 
+                origin: { y: 0.7 },
+                colors: ['#60a5fa', '#f472b6', '#fbbf24', '#4ade80']
+            });
+
+            setTimeout(() => {
+                if (isSuccess) {
+                    resetBoxes();
+                    currentTargetId = -1;
+                    statusMsg.innerText = "下一個要找誰呢？";
+                    isSuccess = false;
+                }
+            }, 2000);
+        }
+
+        function triggerError(hitId) {
+            errorCooldown = true;
+            const wrongEl = document.getElementById(`target-${hitId}`);
+            wrongEl.classList.add('wrong');
+            statusMsg.innerText = "喔喔，差一點點！";
+            
+            audioError.currentTime = 0;
+            audioError.play().catch(() => {});
+
+            setTimeout(() => {
+                wrongEl.classList.remove('wrong');
+                errorCooldown = false;
+            }, 500);
+        }
+
+        // 初始化 Hands
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        hands.onResults(onResults);
+
+        // 改良後的攝影機啟動邏輯
+        async function startCamera() {
+            btnStart.disabled = true;
+            btnStart.innerText = "連線中...";
+            
+            unlockAudio(); // 非阻塞執行
+            
+            try {
+                // 優先取得視訊流，這會彈出手機的權限要求視窗
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } } 
+                });
+                
+                videoElement.srcObject = stream;
+                
+                // 等待視訊實際開始播放
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        videoElement.play().then(resolve);
+                    };
+                });
+
+                isCameraActive = true;
+                initPanel.style.display = 'none';
+                gameUI.classList.remove('hidden');
+                statusMsg.innerText = "準備好了！GO！";
+                
+                // AI 偵測循環
+                const processFrame = async () => {
+                    if (isCameraActive) {
+                        try {
+                            await hands.send({ image: videoElement });
+                        } catch (e) {
+                            console.error("AI 運算錯誤");
+                        }
+                        requestAnimationFrame(processFrame);
+                    }
+                };
+                processFrame();
+
+            } catch (err) {
+                console.error("攝影機啟動失敗:", err);
+                startView.classList.add('hidden');
+                errorView.classList.remove('hidden');
+                document.getElementById('error-desc').innerText = "請到設定中開啟攝影機權限，並使用 Safari 或 Chrome 重新整理。";
+            }
+        }
+
+        btnStart.addEventListener('click', startCamera);
+
+        window.addEventListener('resize', () => {
+            const container = document.getElementById('video-container');
+            if (container && canvasElement) {
+                canvasElement.width = container.clientWidth;
+                canvasElement.height = container.clientHeight;
+            }
+        });
+    </script>
+</body>
+</html>
