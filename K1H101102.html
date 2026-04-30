@@ -430,14 +430,13 @@
             }
 
             if (landmarks) {
-                // 畫半透明骨架
-                drawConnectors(canvasCtx, landmarks, POSE_CONNECTIONS, {color: 'rgba(255,255,255,0.3)', lineWidth: 2});
-                drawLandmarks(canvasCtx, landmarks, {color: 'rgba(59, 130, 246, 0.4)', lineWidth: 1, radius: 2});
+                // 已移除原本全骨架繪製 (drawConnectors, drawLandmarks)
+                // 現在只保留食指的定位圓圈
                 
                 // 畫出完全依照您代碼設計的手指指標 (綁定在 19, 20 食指)
                 drawFingerPointers(canvasCtx, landmarks, cw, ch);
 
-                // 將遊戲互動的追蹤點，從原本的手腕完全改為食指
+                // 將遊戲互動的追蹤點綁定為食指
                 const lHand = landmarks[19] || {x: 0, y:0};
                 const rHand = landmarks[20] || {x: 0, y:0};
 
