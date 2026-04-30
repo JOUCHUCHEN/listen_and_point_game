@@ -94,29 +94,6 @@
             80% { transform: translateX(10px); }
         }
 
-        /* Level 2 模式：平常透明無邊框 */
-        .target-box.level-2-mode {
-            border-color: transparent !important;
-            background-color: transparent !important;
-            box-shadow: none;
-            overflow: visible;
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.3s;
-        }
-
-        /* 當在 Level 2 答對或答錯時，僅保留發光特效與動畫 */
-        .target-box.level-2-mode.success, 
-        .target-box.level-2-mode.wrong {
-            background-color: transparent !important;
-            border-color: transparent !important;
-            box-shadow: none;
-        }
-
-        /* 設定物件在 Level 2 的大小 */
-        #target-0.level-2-mode { width: 28%; }
-        #target-1.level-2-mode { width: 28%; }
-        #target-2.level-2-mode { width: 28%; }
-        #target-3.level-2-mode { width: 28%; }
-
         canvas {
             position: absolute;
             top: 0;
@@ -211,11 +188,6 @@
 
     <div class="app-wrapper">
         
-        <!-- 關卡切換按鈕 -->
-        <button id="btn-level" onclick="toggleLevel()" class="hidden absolute z-50 candy-btn bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-full shadow-lg" style="top: 2cqh; right: 2cqw; padding: 1cqh 2.5cqw; font-size: 2.2cqh; width: auto; min-width: 12cqh;">
-            Level 2 🪁
-        </button>
-
         <!-- 音樂按鈕 -->
         <button id="btn-bgm" onclick="toggleBGM()" class="hidden flex absolute z-50 candy-btn bg-[#34d399] hover:bg-[#10b981] text-white rounded-full shadow-lg items-center justify-center" style="top: 2cqh; left: 2cqw; width: 6cqh; height: 6cqh; font-size: 3cqh;">
             🎵
@@ -315,22 +287,6 @@
             { id: 3, src: 'YOUR_AUDIO_URL_FOR_BOUNCE_A_BALLOON.mp3' }
         ];
 
-        // Level 1 圖片
-        const level1Images = [
-            'https://placehold.co/400x400/fb7185/ffffff?text=Roll+a%0AHoop',
-            'https://placehold.co/400x400/34d399/ffffff?text=Stack%0ACups',
-            'https://placehold.co/400x400/fbbf24/ffffff?text=Blow%0ABubbles',
-            'https://placehold.co/400x400/818cf8/ffffff?text=Bounce+a%0ABalloon'
-        ];
-
-        // Level 2 圖片 (GIFs 或去背圖片)：請替換成您準備的動圖連結
-        const level2Images = [
-            'https://placehold.co/400x400/fb7185/ffffff?text=Roll+a%0AHoop%0A(L2)',
-            'https://placehold.co/400x400/34d399/ffffff?text=Stack%0ACups%0A(L2)',
-            'https://placehold.co/400x400/fbbf24/ffffff?text=Blow%0ABubbles%0A(L2)',
-            'https://placehold.co/400x400/818cf8/ffffff?text=Bounce+a%0ABalloon%0A(L2)'
-        ];
-
         function applyInitialVolumes() {
             bgmAudio.volume = BGM_VOL;
         }
@@ -342,14 +298,13 @@
         let isCameraActive = false;
         let errorCooldown = false; 
         let isBgmPlaying = true;
-        let isLevel2 = false;
 
         let successTimeoutId = null;
         let errorTimeoutId = null;
         let successVoiceTimeoutId = null;
         let errorVoiceTimeoutId = null;
 
-        // 預載音訊與圖片
+        // 預載音訊
         async function preLoadAssets() {
             // 預載音訊 (跳過尚未替換的 dummy 連結避免報錯)
             if (!audioCtx) audioCtx = new AudioCtx();
@@ -364,17 +319,7 @@
                 } catch (e) {}
             });
 
-            // 預載 Level 2 圖片與 GIF
-            const imagePromises = level2Images.map(src => {
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.src = src;
-                    img.onload = resolve;
-                    img.onerror = resolve; // 即使出錯也繼續
-                });
-            });
-
-            await Promise.all([...audioPromises, ...imagePromises]);
+            await Promise.all(audioPromises);
         }
 
         function playBoostedAudio(url, boostLevel) {
@@ -414,94 +359,6 @@
                 btn.innerHTML = '🎵';
                 btn.classList.replace('bg-[#9ca3af]', 'bg-[#34d399]');
             }
-        }
-
-        const itemsPos = [
-            { id: 'target-0', el: null, dirX: 1, dirY: 1 },
-            { id: 'target-1', el: null, dirX: -1.2, dirY: 0.9 },
-            { id: 'target-2', el: null, dirX: 0.8, dirY: -1.1 },
-            { id: 'target-3', el: null, dirX: -1, dirY: -1 }
-        ];
-
-        function toggleLevel() {
-            isLevel2 = !isLevel2;
-            const btn = document.getElementById('btn-level');
-            const container = document.getElementById('video-container');
-            if (isLevel2) {
-                btn.innerHTML = 'Level 1 🏠';
-                btn.classList.replace('bg-[#8b5cf6]', 'bg-[#3b82f6]');
-                
-                // 第二關：背景音樂加速
-                bgmAudio.playbackRate = 1.25;
-
-                // 更新第二關動態圖片
-                document.querySelector('#target-0 .item-img').src = level2Images[0];
-                document.querySelector('#target-1 .item-img').src = level2Images[1]; 
-                document.querySelector('#target-2 .item-img').src = level2Images[2];
-                document.querySelector('#target-3 .item-img').src = level2Images[3];
-                const rect = container.getBoundingClientRect();
-                itemsPos.forEach(anim => {
-                    if (!anim.el) anim.el = document.getElementById(anim.id);
-                    anim.el.classList.add('level-2-mode');
-                    const elRect = anim.el.getBoundingClientRect();
-                    anim.x = elRect.left - rect.left;
-                    anim.y = elRect.top - rect.top;
-                    anim.dirX = (Math.random() > 0.5 ? 1 : -1) * (0.6 + Math.random() * 1.2);
-                    anim.dirY = (Math.random() > 0.5 ? 1 : -1) * (0.6 + Math.random() * 1.2);
-                });
-            } else {
-                btn.innerHTML = 'Level 2 🪁';
-                btn.classList.replace('bg-[#3b82f6]', 'bg-[#8b5cf6]');
-
-                // 第一關：背景音樂速度回到正常
-                bgmAudio.playbackRate = 1.0;
-
-                // 恢復第一關靜態圖片
-                document.querySelector('#target-0 .item-img').src = level1Images[0];
-                document.querySelector('#target-1 .item-img').src = level1Images[1];
-                document.querySelector('#target-2 .item-img').src = level1Images[2];
-                document.querySelector('#target-3 .item-img').src = level1Images[3];
-                const defaultStyles = [{top:'4cqh',left:'4cqh'}, {top:'4cqh',right:'4cqh'}, {bottom:'4cqh',left:'4cqh'}, {bottom:'4cqh',right:'4cqh'}];
-                itemsPos.forEach((anim, i) => {
-                    anim.el.classList.remove('level-2-mode');
-                    anim.x = anim.y = undefined;
-                    Object.assign(anim.el.style, { top: '', left: '', right: '', bottom: '' });
-                    for(let key in defaultStyles[i]) anim.el.style[key] = defaultStyles[i][key];
-                    const img = anim.el.querySelector('.item-img');
-                    if (img) img.style.transform = '';
-                });
-            }
-        }
-
-        function moveItemsLoop() {
-            if (isLevel2 && isCameraActive) {
-                const container = document.getElementById('video-container');
-                const cw = container.clientWidth, ch = container.clientHeight;
-                const speedBase = cw * 0.0035;
-                itemsPos.forEach(anim => {
-                    if (!anim.el || anim.x === undefined) return;
-                    anim.x += anim.dirX * speedBase;
-                    anim.y += anim.dirY * speedBase;
-                    const bw = anim.el.clientWidth, bh = anim.el.clientHeight;
-                    if (anim.x <= 0) { anim.x = 0; anim.dirX *= -1; }
-                    if (anim.x + bw >= cw) { anim.x = cw - bw; anim.dirX *= -1; }
-                    if (anim.y <= 0) { anim.y = 0; anim.dirY *= -1; }
-                    if (anim.y + bh >= ch) { anim.y = ch - bh; anim.dirY *= -1; }
-                    const img = anim.el.querySelector('.item-img');
-                    if (img) {
-                        if (anim.id === 'target-0' || anim.id === 'target-1' || anim.id === 'target-2') {
-                            img.style.transform = anim.dirX > 0 ? 'scaleX(-1)' : 'scaleX(1)';
-                        } else if (anim.id === 'target-3') {
-                            img.style.transform = anim.dirX < 0 ? 'scaleX(-1)' : 'scaleX(1)';
-                        }
-                    }
-                });
-                itemsPos.forEach(anim => {
-                    if (!anim.el || anim.x === undefined) return;
-                    Object.assign(anim.el.style, { left: anim.x + 'px', top: anim.y + 'px', right: 'auto', bottom: 'auto' });
-                });
-            }
-            requestAnimationFrame(moveItemsLoop);
         }
 
         function unlockAudio() {
@@ -637,11 +494,9 @@
                 gameUI.classList.remove('hidden');
                 document.getElementById('main-title').style.display = 'none';
                 document.getElementById('button-container').style.display = 'grid';
-                document.getElementById('btn-level').classList.remove('hidden');
                 document.getElementById('btn-bgm').classList.remove('hidden');
                 if (isBgmPlaying) bgmAudio.play();
-                itemsPos.forEach(anim => anim.el = document.getElementById(anim.id));
-                requestAnimationFrame(moveItemsLoop);
+                
                 const process = async () => {
                     if (isCameraActive) {
                         try { await hands.send({ image: videoElement }); } catch(e) {}
