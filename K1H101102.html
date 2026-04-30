@@ -153,7 +153,7 @@
         let currentQuestion = null;
         let progress = 0;
         let isModelLoaded = false;
-        let lastWrongTouchTime = 0; // 防呆冷卻時間
+        let lastWrongTouchTime = 0; 
         
         // 互動動畫變數
         let lastLeftHand = { x: 0, y: 0 };
@@ -215,10 +215,10 @@
             speakChinese("很好！現在開始動作！");
             progressContainer.classList.remove('hidden');
             
-            if(action === 'Roll a hoop') actionHint.innerHTML = "✨ <strong>任務：雙手或單手握圓框，左右水平來回轉動！</strong>";
-            if(action === 'Bounce a balloon') actionHint.innerHTML = "✨ <strong>任務：手由下往上，快速拍打氣球！</strong>";
+            if(action === 'Roll a hoop') actionHint.innerHTML = "✨ <strong>任務：手指握著圓框，左右水平來回轉動！</strong>";
+            if(action === 'Bounce a balloon') actionHint.innerHTML = "✨ <strong>任務：手指由下往上，快速拍打氣球！</strong>";
             if(action === 'Blow bubbles') actionHint.innerHTML = "✨ <strong>任務：把泡泡框靠近嘴巴，用力吹氣！</strong>";
-            if(action === 'Stack cups') actionHint.innerHTML = "✨ <strong>任務：雙手拿著杯子，在胸前靠攏排列！</strong>";
+            if(action === 'Stack cups') actionHint.innerHTML = "✨ <strong>任務：用手指拿著杯子，在胸前靠攏排列！</strong>";
             
             balloonYOffset = -80;
             hoopRotation = 0;
@@ -256,7 +256,7 @@
             progressContainer.classList.add('hidden');
             
             targetActionText.innerHTML = `任務：<span class="text-2xl ml-2 text-blue-600 font-black">${action}</span>`;
-            actionHint.innerHTML = `👉 <strong>第一步：請「用黃色光圈」或「滑鼠」碰觸畫面的道具！</strong>`;
+            actionHint.innerHTML = `👉 <strong>第一步：請用「手指黃圈」或「滑鼠」碰觸畫面的道具！</strong>`;
             
             speak(action);
         }
@@ -285,20 +285,23 @@
             progressText.innerText = `${Math.floor(clamped)}%`;
         }
 
-        // --- 視覺回饋：畫出手部光圈 ---
-        function drawHandAuras(ctx, landmarks, cw, ch) {
-            // 取手腕與手指關節，畫出明顯黃色光圈
-            const points = [15, 16, 17, 18, 19, 20]; 
+        // --- 視覺回饋：畫出與參考代碼完全相同的手指指標 ---
+        function drawFingerPointers(ctx, landmarks, cw, ch) {
+            // 在 Pose 模型中，19 是左手食指，20 是右手食指
+            const tips = [19, 20]; 
             ctx.save();
-            points.forEach(i => {
+            tips.forEach(i => {
                 const pt = landmarks[i];
-                if (pt && pt.visibility > 0.05) { // 降低信心門檻，有抓到就畫
+                if (pt && pt.visibility > 0.05) { 
+                    const x = pt.x * cw;
+                    const y = pt.y * ch;
                     ctx.beginPath();
-                    ctx.arc(pt.x * cw, pt.y * ch, 25, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(250, 204, 21, 0.7)'; // 黃色光圈
+                    // 套用參考代碼的圓圈比例設計
+                    ctx.arc(x, y, cw * 0.025, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#fbbf24'; // 黃色
                     ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = '#ffffff';
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = cw * 0.006;
                     ctx.stroke();
                 }
             });
@@ -312,7 +315,7 @@
                 const py = prop.y * ch;
 
                 ctx.save();
-                ctx.beginPath(); ctx.arc(px, py, 80, 0, Math.PI * 2); // 放大視覺底座
+                ctx.beginPath(); ctx.arc(px, py, 80, 0, Math.PI * 2); 
                 ctx.fillStyle = prop.color; ctx.globalAlpha = 0.6; ctx.fill();
                 ctx.globalAlpha = 1.0; ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.stroke();
 
@@ -325,10 +328,9 @@
             });
         }
 
-        // 檢查手是否碰到道具
+        // 檢查手指是否碰到道具 (僅依賴食指指標)
         function checkPropCollision(landmarks, cw, ch) {
-            // 把手指跟手腕都算進去
-            const hitPoints = [15, 16, 17, 18, 19, 20, 21, 22]; 
+            const hitPoints = [19, 20]; // 僅判定食指 19, 20
             for (let prop of SCREEN_PROPS) {
                 const px = prop.x * cw;
                 const py = prop.y * ch;
@@ -336,7 +338,8 @@
                     const pt = landmarks[idx];
                     if (pt && pt.visibility > 0.05) {
                         const dist = Math.hypot((pt.x * cw) - px, (pt.y * ch) - py);
-                        if (dist < 160) return prop; // 加大觸碰半徑至 160px
+                        // 道具半徑(80) + 指標寬容值，設為 120 讓觸碰流暢
+                        if (dist < 120) return prop; 
                     }
                 }
             }
@@ -365,7 +368,7 @@
             }
         }
 
-        // 繪製手中的互動道具
+        // 繪製手指上的互動道具
         function drawActiveProp(ctx, action, px, py, prog) {
             ctx.save();
             if (action === 'Roll a hoop') {
@@ -431,22 +434,21 @@
                 drawConnectors(canvasCtx, landmarks, POSE_CONNECTIONS, {color: 'rgba(255,255,255,0.3)', lineWidth: 2});
                 drawLandmarks(canvasCtx, landmarks, {color: 'rgba(59, 130, 246, 0.4)', lineWidth: 1, radius: 2});
                 
-                // 畫出手部的視覺光圈 (方便學生知道手在哪)
-                drawHandAuras(canvasCtx, landmarks, cw, ch);
+                // 畫出完全依照您代碼設計的手指指標 (綁定在 19, 20 食指)
+                drawFingerPointers(canvasCtx, landmarks, cw, ch);
 
-                const lHand = landmarks[15] || {x: 0, y:0};
-                const rHand = landmarks[16] || {x: 0, y:0};
+                // 將遊戲互動的追蹤點，從原本的手腕完全改為食指
+                const lHand = landmarks[19] || {x: 0, y:0};
+                const rHand = landmarks[20] || {x: 0, y:0};
 
                 if (gamePhase === 'selecting') {
                     const touchedProp = checkPropCollision(landmarks, cw, ch);
                     if (touchedProp) {
                         if (touchedProp.id === currentQuestion) {
-                            // 初始化動作位置
                             lastLeftHand = { x: lHand.x, y: lHand.y };
                             lastRightHand = { x: rHand.x, y: rHand.y };
                             activateProp(currentQuestion);
                         } else {
-                            // 防呆提示，避免瘋狂廣播
                             if (Date.now() - lastWrongTouchTime > 3000) {
                                 speakChinese("Oops! 是另一個喔！");
                                 lastWrongTouchTime = Date.now();
@@ -462,12 +464,11 @@
                     const rdx = rHand.x - lastRightHand.x;
                     const rdy = rHand.y - lastRightHand.y;
 
-                    // 決定道具要畫在哪一隻手上 (通常是舉得比較高的手)
+                    // 決定道具要畫在哪一隻手指上
                     let activeHand = lHand.y < rHand.y ? lHand : rHand;
                     let px = activeHand.x * cw;
                     let py = activeHand.y * ch;
 
-                    // 如果是吹泡泡，畫在離嘴巴比較近的手
                     if (currentQuestion === 'Blow bubbles') {
                         const mouthX = (landmarks[9].x + landmarks[10].x) / 2;
                         const mouthY = (landmarks[9].y + landmarks[10].y) / 2;
@@ -481,7 +482,6 @@
 
                     switch (currentQuestion) {
                         case 'Roll a hoop':
-                            // 左右手任何一隻水平移動都算
                             if (Math.abs(ldx) > 0.004 || Math.abs(rdx) > 0.004) {
                                 const moveX = Math.abs(ldx) > Math.abs(rdx) ? ldx : rdx;
                                 hoopRotation += moveX * 18;
@@ -491,11 +491,10 @@
                             break;
 
                         case 'Bounce a balloon':
-                            // 左右手任何一隻向上揮動都算
                             if (ldy < -0.01 || rdy < -0.01) {
                                 balloonVelocity = -18; 
                                 isActionActive = true;
-                                progress += 8; // 增加進度速度
+                                progress += 8; 
                             }
                             balloonVelocity += 1.5; 
                             balloonYOffset += balloonVelocity;
@@ -508,7 +507,7 @@
                             const mouthX = (landmarks[9].x + landmarks[10].x) / 2;
                             const distToMouth = Math.hypot(activeHand.x - mouthX, activeHand.y - mouthY);
                             
-                            if (distToMouth < 0.28) { // 放寬吹泡泡判定距離
+                            if (distToMouth < 0.28) { 
                                 isActionActive = true;
                                 progress += 2.5;
                                 if (Math.random() > 0.3) {
@@ -519,7 +518,7 @@
 
                         case 'Stack cups':
                             const distHands = Math.hypot(lHand.x - rHand.x, lHand.y - rHand.y);
-                            if (distHands < 0.28) { // 放寬疊杯子判定距離
+                            if (distHands < 0.28) { 
                                 isActionActive = true;
                                 progress += 3.0;
                             }
@@ -530,7 +529,6 @@
                     progress = Math.max(0, Math.min(100, progress));
                     updateProgressBar();
 
-                    // 更新雙手位置紀錄
                     lastLeftHand = { x: lHand.x, y: lHand.y };
                     lastRightHand = { x: rHand.x, y: rHand.y };
 
@@ -556,7 +554,7 @@
         const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
         pose.setOptions({
             modelComplexity: 1, smoothLandmarks: true,
-            minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 // 降低門檻，更好抓取
+            minDetectionConfidence: 0.4, minTrackingConfidence: 0.4 
         });
         pose.onResults(onResults);
 
